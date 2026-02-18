@@ -1,0 +1,26 @@
+export { OxPDFClient } from "./client.js";
+export { OxPDFError } from "./errors.js";
+export type {
+  AnalyticsResult,
+  ClientOptions,
+  CreateSchemaOptions,
+  ExtractImagesOptions,
+  FileInfo,
+  FileListResult,
+  GenerateSchemaOptions,
+  GenerateSchemaResult,
+  ImageInfo,
+  ImageListResult,
+  ImageUrlResult,
+  JobStatus,
+  ParseOptions,
+  ParseResult,
+  ParseStreamOptions,
+  SchemaInfo,
+  SchemaTemplate,
+  StreamEvent,
+  UpdateSchemaOptions,
+  UploadOptions,
+  UploadResult,
+  ValidateOptions,
+} from "./types.js";
