@@ -23,7 +23,7 @@ import type {
   ValidateOptions,
 } from "./types.js";
 
-const DEFAULT_BASE_URL = "https://api.0xpdf.com/api/v1";
+const DEFAULT_BASE_URL = "https://api.0xpdf.io/api/v1";
 const DEFAULT_TIMEOUT = 120_000;
 
 export class OxPDFClient {

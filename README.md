@@ -1,6 +1,6 @@
 # oxpdf
 
-TypeScript/JavaScript SDK for the [0xPdf](https://0xpdf.com) PDF-to-JSON API.
+TypeScript/JavaScript SDK for the [0xPdf](https://0xpdf.io) PDF-to-JSON API.
 
 Works in **Node.js 18+**, **Bun**, **Deno**, and the **browser** — zero dependencies, uses native `fetch`.
 
@@ -77,7 +77,7 @@ new OxPDFClient({ apiKey, baseUrl?, timeout? })
 | Option    | Type     | Default                              | Description          |
 | --------- | -------- | ------------------------------------ | -------------------- |
 | `apiKey`  | `string` | —                                    | Your 0xPdf API key   |
-| `baseUrl` | `string` | `https://api.0xpdf.com/api/v1`      | API base URL         |
+| `baseUrl` | `string` | `https://api.0xpdf.io/api/v1`      | API base URL         |
 | `timeout` | `number` | `120000`                             | Request timeout (ms) |
 
 ### PDF Parsing
