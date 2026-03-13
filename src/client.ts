@@ -14,6 +14,7 @@ import type {
   ParseOptions,
   ParseResult,
   ParseStreamOptions,
+  RetryOptions,
   SchemaInfo,
   SchemaTemplate,
   StreamEvent,
@@ -21,15 +22,26 @@ import type {
   UploadOptions,
   UploadResult,
   ValidateOptions,
+  WaitForJobOptions,
 } from "./types.js";
 
 const DEFAULT_BASE_URL = "https://api.0xpdf.io/api/v1";
 const DEFAULT_TIMEOUT = 120_000;
+const DEFAULT_RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504];
+const DEFAULT_RETRY: Required<RetryOptions> = {
+  maxRetries: 2,
+  initialDelayMs: 500,
+  backoffMultiplier: 2,
+  retryableStatusCodes: DEFAULT_RETRYABLE_STATUS_CODES,
+};
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class OxPDFClient {
   readonly #apiKey: string;
   readonly #baseUrl: string;
   readonly #timeout: number;
+  readonly #retry: Required<RetryOptions>;
 
   constructor(options: ClientOptions) {
     if (!options.apiKey) {
@@ -38,6 +50,13 @@ export class OxPDFClient {
     this.#apiKey = options.apiKey;
     this.#baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.#timeout = options.timeout ?? DEFAULT_TIMEOUT;
+    this.#retry = {
+      maxRetries: options.retry?.maxRetries ?? DEFAULT_RETRY.maxRetries,
+      initialDelayMs: options.retry?.initialDelayMs ?? DEFAULT_RETRY.initialDelayMs,
+      backoffMultiplier: options.retry?.backoffMultiplier ?? DEFAULT_RETRY.backoffMultiplier,
+      retryableStatusCodes:
+        options.retry?.retryableStatusCodes ?? DEFAULT_RETRY.retryableStatusCodes,
+    };
   }
 
   // ── internal helpers ─────────────────────────────────────────────
@@ -62,49 +81,70 @@ export class OxPDFClient {
       }
     }
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.#timeout);
+    for (let attempt = 0; attempt <= this.#retry.maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.#timeout);
+      let resp: Response;
 
-    let resp: Response;
-    try {
-      resp = await fetch(url.toString(), {
-        method,
-        headers: {
-          "X-API-Key": this.#apiKey,
-          ...init?.headers,
-        },
-        body: init?.body,
-        signal: controller.signal,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new OxPDFError(`Request failed: ${msg}`);
-    } finally {
-      clearTimeout(timer);
-    }
-
-    if (resp.status === 204) return {} as T;
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      let detail: string;
       try {
-        const body = JSON.parse(text);
-        const raw = body.detail ?? body.error ?? text;
-        if (Array.isArray(raw)) {
-          detail = raw.map((d: Record<string, unknown>) => d.msg ?? JSON.stringify(d)).join("; ");
-        } else {
-          detail = typeof raw === "string" ? raw : JSON.stringify(raw);
+        resp = await fetch(url.toString(), {
+          method,
+          headers: {
+            "X-API-Key": this.#apiKey,
+            ...init?.headers,
+          },
+          body: init?.body,
+          signal: controller.signal,
+        });
+      } catch (err) {
+        clearTimeout(timer);
+        if (attempt < this.#retry.maxRetries) {
+          const delay =
+            this.#retry.initialDelayMs * Math.pow(this.#retry.backoffMultiplier, attempt);
+          await sleep(delay);
+          continue;
         }
-      } catch {
-        detail = text || resp.statusText || `HTTP ${resp.status}`;
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new OxPDFError(`Request failed: ${msg}`);
+      } finally {
+        clearTimeout(timer);
       }
-      throw new OxPDFError(detail, resp.status, text);
+
+      if (resp.status === 204) return {} as T;
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        if (
+          this.#retry.retryableStatusCodes.includes(resp.status) &&
+          attempt < this.#retry.maxRetries
+        ) {
+          const delay =
+            this.#retry.initialDelayMs * Math.pow(this.#retry.backoffMultiplier, attempt);
+          await sleep(delay);
+          continue;
+        }
+
+        let detail: string;
+        try {
+          const body = JSON.parse(text);
+          const raw = body.detail ?? body.error ?? text;
+          if (Array.isArray(raw)) {
+            detail = raw.map((d: Record<string, unknown>) => d.msg ?? JSON.stringify(d)).join("; ");
+          } else {
+            detail = typeof raw === "string" ? raw : JSON.stringify(raw);
+          }
+        } catch {
+          detail = text || resp.statusText || `HTTP ${resp.status}`;
+        }
+        throw new OxPDFError(detail, resp.status, text);
+      }
+
+      const text = await resp.text();
+      if (!text) return {} as T;
+      return JSON.parse(text) as T;
     }
 
-    const text = await resp.text();
-    if (!text) return {} as T;
-    return JSON.parse(text) as T;
+    throw new OxPDFError("Request failed after retries");
   }
 
   #buildPdfForm(
@@ -292,6 +332,29 @@ export class OxPDFClient {
   /** Poll the status of an async PDF processing job. */
   async jobStatus(jobId: string): Promise<JobStatus> {
     return this.#request<JobStatus>("GET", `pdf/status/${jobId}`);
+  }
+
+  /**
+   * Wait until an async job reaches a terminal state.
+   * Throws on timeout.
+   */
+  async waitForJob(jobId: string, options: WaitForJobOptions = {}): Promise<JobStatus> {
+    const intervalMs = options.intervalMs ?? 2_000;
+    const timeoutMs = options.timeoutMs ?? 120_000;
+    const startedAt = Date.now();
+
+    while (true) {
+      const status = await this.jobStatus(jobId);
+      if (status.status === "completed" || status.status === "failed") {
+        return status;
+      }
+      if (Date.now() - startedAt > timeoutMs) {
+        throw new OxPDFError(
+          `Timed out waiting for job ${jobId} after ${timeoutMs}ms`,
+        );
+      }
+      await sleep(intervalMs);
+    }
   }
 
   // ── PDF validation ───────────────────────────────────────────────

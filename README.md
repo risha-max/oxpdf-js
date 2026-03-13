@@ -28,6 +28,16 @@ const result2 = await client.parseFile("./invoice.pdf", {
   schemaTemplate: "invoice",
 });
 
+// Queue async processing and wait for completion
+const queued = await client.upload(pdfBuffer, "invoice.pdf", {
+  schemaId: "your_schema_id",
+});
+const finalStatus = await client.waitForJob(queued.job_id, {
+  intervalMs: 2000,
+  timeoutMs: 180000,
+});
+console.log(finalStatus.status);
+
 // Streaming parse with real-time progress
 for await (const event of client.parseFileStream("./large.pdf", {
   schemaTemplate: "invoice",
@@ -71,7 +81,7 @@ try {
 ### Constructor
 
 ```typescript
-new OxPDFClient({ apiKey, baseUrl?, timeout? })
+new OxPDFClient({ apiKey, baseUrl?, timeout?, retry? })
 ```
 
 | Option    | Type     | Default                              | Description          |
@@ -79,6 +89,7 @@ new OxPDFClient({ apiKey, baseUrl?, timeout? })
 | `apiKey`  | `string` | —                                    | Your 0xPdf API key   |
 | `baseUrl` | `string` | `https://api.0xpdf.io/api/v1`      | API base URL         |
 | `timeout` | `number` | `120000`                             | Request timeout (ms) |
+| `retry` | `object` | `{ maxRetries: 2, initialDelayMs: 500, backoffMultiplier: 2 }` | Retry/backoff config |
 
 ### PDF Parsing
 
@@ -96,6 +107,7 @@ new OxPDFClient({ apiKey, baseUrl?, timeout? })
 |---|---|
 | `upload(file, filename, options?)` | Queue PDF for background processing |
 | `jobStatus(jobId)` | Poll async job status |
+| `waitForJob(jobId, options?)` | Poll until `completed`/`failed` (with timeout) |
 
 ### Image Extraction
 

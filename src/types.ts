@@ -3,6 +3,26 @@ export interface ClientOptions {
   baseUrl?: string;
   /** Request timeout in milliseconds (default: 120_000) */
   timeout?: number;
+  /** Retry settings for transient failures (network, 429, 5xx). */
+  retry?: RetryOptions;
+}
+
+export interface RetryOptions {
+  /** Maximum retries per request (default: 2). */
+  maxRetries?: number;
+  /** Initial backoff delay in milliseconds (default: 500). */
+  initialDelayMs?: number;
+  /** Multiplier applied on each retry (default: 2). */
+  backoffMultiplier?: number;
+  /** HTTP statuses to retry (default: 429, 500, 502, 503, 504). */
+  retryableStatusCodes?: number[];
+}
+
+export interface WaitForJobOptions {
+  /** Poll interval in milliseconds (default: 2000). */
+  intervalMs?: number;
+  /** Overall timeout in milliseconds (default: 120000). */
+  timeoutMs?: number;
 }
 
 // ── Parse ──────────────────────────────────────────────────────────
@@ -24,9 +44,43 @@ export interface ParseResult {
   success: boolean;
   data?: Record<string, unknown>;
   error?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: ParseMetadata;
   cached?: boolean;
   quota?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface SchemaValidationError {
+  path: string;
+  expected: string[];
+  actual: string;
+  message: string;
+}
+
+export interface FieldConfidence {
+  value_present: boolean;
+  type_match: boolean;
+  confidence: number;
+  source?: string;
+}
+
+export interface SchemaQualityMetadata {
+  required_fields_total?: number;
+  required_fields_filled?: number;
+  missing_required_fields?: string[];
+  required_fields_guaranteed?: boolean;
+  required_coverage_pct?: number;
+  validation_errors?: SchemaValidationError[];
+  schema_adherence_score?: number;
+  field_confidence?: Record<string, FieldConfidence>;
+}
+
+export interface ParseMetadata {
+  pdf?: Record<string, unknown>;
+  processing?: Record<string, unknown>;
+  structure?: Record<string, unknown>;
+  ocr?: Record<string, unknown>;
+  schema_quality?: SchemaQualityMetadata;
   [key: string]: unknown;
 }
 
