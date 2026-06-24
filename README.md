@@ -1,4 +1,4 @@
-# oxpdf
+# @0xpdf/client
 
 TypeScript/JavaScript SDK for the [0xPdf](https://0xpdf.io) PDF-to-JSON API.
 
@@ -7,13 +7,15 @@ Works in **Node.js 18+**, **Bun**, **Deno**, and the **browser** — zero depend
 ## Installation
 
 ```bash
-npm install oxpdf
+npm install @0xpdf/client
 ```
+
+> The legacy unscoped package [`oxpdf`](https://www.npmjs.com/package/oxpdf) is deprecated; use `@0xpdf/client` for new projects.
 
 ## Quick Start
 
 ```typescript
-import { OxPDFClient } from "oxpdf";
+import { OxPDFClient } from "@0xpdf/client";
 
 const client = new OxPDFClient({ apiKey: "your_api_key" });
 
@@ -63,7 +65,7 @@ input.addEventListener("change", async () => {
 ## Error Handling
 
 ```typescript
-import { OxPDFClient, OxPDFError } from "oxpdf";
+import { OxPDFClient, OxPDFError } from "@0xpdf/client";
 
 try {
   const result = await client.parseFile("doc.pdf", {

@@ -1,4 +1,4 @@
-name: Publish JS SDK
+name: Publish @0xpdf/client
 
 on:
   workflow_dispatch:
@@ -31,5 +31,11 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Deprecate legacy oxpdf package
+        run: npm deprecate oxpdf@* "Use @0xpdf/client instead — https://www.npmjs.com/package/@0xpdf/client"
+        continue-on-error: true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
