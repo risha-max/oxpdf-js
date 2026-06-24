@@ -6,6 +6,10 @@ on:
     tags:
       - "v*"
 
+concurrency:
+  group: npm-publish
+  cancel-in-progress: true
+
 permissions:
   contents: read
   id-token: write
@@ -25,19 +29,39 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
+      - name: Validate release tag matches package version
+        if: github.event_name == 'push'
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "Git tag v${TAG} must match package.json version ${VERSION}"
+            exit 1
+          fi
+
       - name: Install dependencies
         run: npm install
 
       - name: Build package
         run: npm run build
 
-      - name: Verify npm identity
-        run: npm whoami
-        continue-on-error: true
+      - name: Check if version is already on npm
+        id: npm_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          if npm view "@0xpdf/client@${VERSION}" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::@0xpdf/client@${VERSION} is already on npm — skipping publish"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Publish to npm
+        if: steps.npm_version.outputs.published != 'true'
         run: npm publish --access public --provenance
 
       - name: Deprecate legacy oxpdf package
+        if: steps.npm_version.outputs.published != 'true'
         run: npm deprecate oxpdf@* "Use @0xpdf/client instead — https://www.npmjs.com/package/@0xpdf/client"
         continue-on-error: true
