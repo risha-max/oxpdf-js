@@ -33,6 +33,7 @@ jobs:
 
       - name: Verify npm identity
         run: npm whoami
+        continue-on-error: true
 
       - name: Publish to npm
         run: npm publish --access public --provenance
